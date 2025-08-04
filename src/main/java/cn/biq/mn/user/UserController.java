@@ -4,10 +4,12 @@ import cn.biq.mn.response.BaseResponse;
 import cn.biq.mn.response.DataMessageResponse;
 import cn.biq.mn.response.DataResponse;
 import cn.biq.mn.utils.MessageSourceUtil;
+import cn.biq.mn.utils.WebUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.util.StringUtils;
 
 
 @RestController
@@ -28,8 +30,12 @@ public class UserController {
 
     @RequestMapping(method = RequestMethod.POST, value = "/logout")
     public BaseResponse handleLogout() {
+        String token = WebUtils.resolveToken(httpServletRequest);
+        if (!StringUtils.hasText(token)) {
+            token = (String) httpServletRequest.getSession().getAttribute("accessToken");
+        }
         httpServletRequest.getSession().removeAttribute("accessToken");
-        return new BaseResponse(userService.logout());
+        return new BaseResponse(userService.logout(token));
     }
 
     // 注册

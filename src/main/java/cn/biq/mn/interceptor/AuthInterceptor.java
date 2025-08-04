@@ -9,6 +9,7 @@ import cn.biq.mn.group.Group;
 import cn.biq.mn.group.GroupRepository;
 import cn.biq.mn.security.CurrentSession;
 import cn.biq.mn.security.JwtUtils;
+import cn.biq.mn.security.TokenBlacklistRepository;
 import cn.biq.mn.user.User;
 import cn.biq.mn.user.UserRepository;
 import com.auth0.jwt.exceptions.JWTVerificationException;
@@ -28,6 +29,7 @@ public class AuthInterceptor implements HandlerInterceptor {
     private final UserRepository userRepository;
     private final BookRepository bookRepository;
     private final GroupRepository groupRepository;
+    private final TokenBlacklistRepository tokenBlacklistRepository;
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
@@ -37,6 +39,9 @@ public class AuthInterceptor implements HandlerInterceptor {
         }
         if (!StringUtils.hasText(token) && currentSession.getUser() == null) {
             throw new FailureMessageException("user.authentication.empty");
+        }
+        if (StringUtils.hasText(token) && tokenBlacklistRepository.existsByToken(token)) {
+            throw new FailureMessageException("user.authentication.invalid");
         }
         if (StringUtils.hasText(token) && !token.equals(currentSession.getAccessToken())) {
             try {
