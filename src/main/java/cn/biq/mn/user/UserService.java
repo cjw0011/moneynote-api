@@ -18,6 +18,8 @@ import cn.biq.mn.group.GroupRepository;
 import cn.biq.mn.security.JwtUtils;
 import cn.biq.mn.security.TokenBlacklist;
 import cn.biq.mn.security.TokenBlacklistRepository;
+import cn.biq.mn.security.RefreshToken;
+import cn.biq.mn.security.RefreshTokenRepository;
 import cn.biq.mn.utils.SessionUtil;
 import com.querydsl.core.BooleanBuilder;
 import lombok.RequiredArgsConstructor;
@@ -27,6 +29,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
+import java.time.Duration;
+import java.util.UUID;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -49,11 +53,12 @@ public class UserService {
     private final MessageSourceUtil messageSourceUtil;
     private final ApplicationScopeBean applicationScopeBean;
     private final TokenBlacklistRepository tokenBlacklistRepository;
+    private final RefreshTokenRepository refreshTokenRepository;
 
     @Value("${invite_code:111111}")
     private String inviteCode;
 
-    @Transactional(readOnly = true)
+    @Transactional
     public LoginResponse login(LoginForm form) {
         var response = new LoginResponse();
         User user = userRepository.findOneByUsername(form.getUsername()).orElse(null);
@@ -61,8 +66,17 @@ public class UserService {
             throw new FailureMessageException("user.login.wrong.credentials");
         }
         // Filter中设置context，这里不需要
-        String jwt = jwtUtils.createToken(user);
+        String jwt = jwtUtils.createAccessToken(user);
         response.setAccessToken(jwt);
+        // 生成刷新令牌
+        RefreshToken refreshToken = new RefreshToken();
+        refreshToken.setToken(UUID.randomUUID().toString());
+        refreshToken.setUser(user);
+        long now = System.currentTimeMillis();
+        refreshToken.setExpireTime(now + Duration.ofDays(30).toMillis());
+        refreshToken.setLastUsedTime(now);
+        refreshTokenRepository.save(refreshToken);
+        response.setRefreshToken(refreshToken.getToken());
         response.setUsername(user.getUsername());
         response.setRemember(form.getRemember());
         sessionUtil.clear();
@@ -76,8 +90,30 @@ public class UserService {
             blacklist.setToken(token);
             tokenBlacklistRepository.save(blacklist);
         }
+        if (sessionUtil.getCurrentUser() != null) {
+            refreshTokenRepository.deleteByUser(sessionUtil.getCurrentUser());
+        }
         sessionUtil.clear();
         return true;
+    }
+
+    @Transactional
+    public LoginResponse refreshAccessToken(String refreshTokenStr) {
+        RefreshToken refreshToken = refreshTokenRepository.findByToken(refreshTokenStr)
+                .orElseThrow(() -> new FailureMessageException("user.authentication.invalid"));
+        if (refreshToken.getExpireTime() < System.currentTimeMillis()) {
+            refreshTokenRepository.delete(refreshToken);
+            throw new FailureMessageException("user.authentication.invalid");
+        }
+        refreshToken.setExpireTime(System.currentTimeMillis() + Duration.ofDays(30).toMillis());
+        refreshToken.setLastUsedTime(System.currentTimeMillis());
+        refreshTokenRepository.save(refreshToken);
+        String accessToken = jwtUtils.createAccessToken(refreshToken.getUser());
+        var response = new LoginResponse();
+        response.setAccessToken(accessToken);
+        response.setRefreshToken(refreshToken.getToken());
+        response.setUsername(refreshToken.getUser().getUsername());
+        return response;
     }
 
     public boolean register(RegisterForm form) {
