@@ -98,7 +98,7 @@ public class UserService {
     }
 
     @Transactional
-    public LoginResponse refreshAccessToken(String refreshTokenStr) {
+    public LoginResponse refreshAccessToken(String refreshTokenStr, String oldAccessToken) {
         RefreshToken refreshToken = refreshTokenRepository.findByToken(refreshTokenStr)
                 .orElseThrow(() -> new FailureMessageException("user.authentication.invalid"));
         if (refreshToken.getExpireTime() < System.currentTimeMillis()) {
@@ -108,6 +108,11 @@ public class UserService {
         refreshToken.setExpireTime(System.currentTimeMillis() + Duration.ofDays(30).toMillis());
         refreshToken.setLastUsedTime(System.currentTimeMillis());
         refreshTokenRepository.save(refreshToken);
+        if (StringUtils.hasText(oldAccessToken) && !tokenBlacklistRepository.existsByToken(oldAccessToken)) {
+            TokenBlacklist blacklist = new TokenBlacklist();
+            blacklist.setToken(oldAccessToken);
+            tokenBlacklistRepository.save(blacklist);
+        }
         String accessToken = jwtUtils.createAccessToken(refreshToken.getUser());
         var response = new LoginResponse();
         response.setAccessToken(accessToken);
