@@ -7,9 +7,10 @@ import cn.biq.mn.utils.MessageSourceUtil;
 import cn.biq.mn.utils.WebUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
 import lombok.RequiredArgsConstructor;
-import org.springframework.web.bind.annotation.*;
 import org.springframework.util.StringUtils;
+import org.springframework.web.bind.annotation.*;
 
 
 @RestController
@@ -26,6 +27,11 @@ public class UserController {
         var result = userService.login(request);
         httpServletRequest.getSession().setAttribute("accessToken", result.getAccessToken());
         return new DataMessageResponse<>(result, messageSourceUtil.getMessage("user.login.success"));
+    }
+
+    @RequestMapping(method = RequestMethod.POST, value = "/refresh")
+    public BaseResponse handleRefresh(@Valid @RequestBody RefreshTokenForm form) {
+        return new DataResponse<>(userService.refreshAccessToken(form.refreshToken()));
     }
 
     @RequestMapping(method = RequestMethod.POST, value = "/logout")
@@ -79,5 +85,7 @@ public class UserController {
     public BaseResponse handleSetDefaultGroup(@PathVariable("id") String id) {
         return new BaseResponse(userService.setDefaultGroupAndBook(id));
     }
+
+    public record RefreshTokenForm(@NotBlank String refreshToken) {}
 
 }
