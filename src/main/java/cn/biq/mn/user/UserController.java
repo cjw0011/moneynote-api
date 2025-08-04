@@ -31,7 +31,13 @@ public class UserController {
 
     @RequestMapping(method = RequestMethod.POST, value = "/refresh")
     public BaseResponse handleRefresh(@Valid @RequestBody RefreshTokenForm form) {
-        return new DataResponse<>(userService.refreshAccessToken(form.refreshToken()));
+        String token = WebUtils.resolveToken(httpServletRequest);
+        if (!StringUtils.hasText(token)) {
+            token = (String) httpServletRequest.getSession().getAttribute("accessToken");
+        }
+        var result = userService.refreshAccessToken(form.refreshToken(), token);
+        httpServletRequest.getSession().setAttribute("accessToken", result.getAccessToken());
+        return new DataResponse<>(result);
     }
 
     @RequestMapping(method = RequestMethod.POST, value = "/logout")
