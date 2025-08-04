@@ -16,6 +16,8 @@ import cn.biq.mn.group.Group;
 import cn.biq.mn.group.GroupMapper;
 import cn.biq.mn.group.GroupRepository;
 import cn.biq.mn.security.JwtUtils;
+import cn.biq.mn.security.TokenBlacklist;
+import cn.biq.mn.security.TokenBlacklistRepository;
 import cn.biq.mn.utils.SessionUtil;
 import com.querydsl.core.BooleanBuilder;
 import lombok.RequiredArgsConstructor;
@@ -46,6 +48,7 @@ public class UserService {
     private final BookService bookService;
     private final MessageSourceUtil messageSourceUtil;
     private final ApplicationScopeBean applicationScopeBean;
+    private final TokenBlacklistRepository tokenBlacklistRepository;
 
     @Value("${invite_code:111111}")
     private String inviteCode;
@@ -66,8 +69,14 @@ public class UserService {
         return response;
     }
 
-    @Transactional(readOnly = true)
-    public boolean logout() {
+    @Transactional
+    public boolean logout(String token) {
+        if (StringUtils.hasText(token)) {
+            TokenBlacklist blacklist = new TokenBlacklist();
+            blacklist.setToken(token);
+            tokenBlacklistRepository.save(blacklist);
+        }
+        sessionUtil.clear();
         return true;
     }
 
