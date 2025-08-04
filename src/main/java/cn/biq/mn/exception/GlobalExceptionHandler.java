@@ -7,6 +7,7 @@ import jakarta.validation.ConstraintViolationException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.transaction.TransactionSystemException;
 import org.springframework.util.StringUtils;
@@ -125,9 +126,16 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(FailureMessageException.class)
     @ResponseBody
-    public BaseResponse exceptionHandler(FailureMessageException e) {
+    public ResponseEntity<BaseResponse> exceptionHandler(FailureMessageException e) {
         e.printStackTrace();
-        return new SimpleResponse(false, messageSourceUtil.getMessage(e.getMessage()), e.getShowType());
+        if ("user.authentication.empty".equals(e.getMessage())
+                || "user.authentication.invalid".equals(e.getMessage())) {
+            SimpleResponse response = new SimpleResponse(false, HttpStatus.UNAUTHORIZED.value(),
+                    messageSourceUtil.getMessage(e.getMessage()), e.getShowType());
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
+        }
+        SimpleResponse response = new SimpleResponse(false, messageSourceUtil.getMessage(e.getMessage()), e.getShowType());
+        return ResponseEntity.ok(response);
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
