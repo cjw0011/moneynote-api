@@ -6,12 +6,16 @@ import cn.biq.mn.response.PageResponse;
 import cn.biq.mn.validation.ValidFile;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+
+import java.util.ArrayList;
+import java.util.List;
 
 @RestController
 @RequestMapping("/balance-flows")
@@ -28,7 +32,18 @@ public class BalanceFlowController {
 
     @RequestMapping(method = RequestMethod.GET, value = "")
     public BaseResponse handleQuery(BalanceFlowQueryForm form, @PageableDefault(sort = "createTime", direction = Sort.Direction.DESC) Pageable page) {
-        return new PageResponse<>(balanceFlowService.query(form, page));
+        return new PageResponse<>(balanceFlowService.query(form, fixPageable(page)));
+    }
+
+    private Pageable fixPageable(Pageable page) {
+        List<Sort.Order> orders = new ArrayList<>();
+        page.getSort().forEach(order -> {
+            if (!"undefined".equals(order.getProperty())) {
+                orders.add(order);
+            }
+        });
+        Sort sort = orders.isEmpty() ? Sort.by(Sort.Direction.DESC, "createTime") : Sort.by(orders);
+        return PageRequest.of(page.getPageNumber(), page.getPageSize(), sort);
     }
 
     @RequestMapping(method = RequestMethod.GET, value = "/{id}")
