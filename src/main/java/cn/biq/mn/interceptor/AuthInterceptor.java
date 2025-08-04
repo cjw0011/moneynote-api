@@ -9,6 +9,7 @@ import cn.biq.mn.group.Group;
 import cn.biq.mn.group.GroupRepository;
 import cn.biq.mn.security.CurrentSession;
 import cn.biq.mn.security.JwtUtils;
+import cn.biq.mn.security.TokenBlacklist;
 import cn.biq.mn.security.TokenBlacklistRepository;
 import cn.biq.mn.user.User;
 import cn.biq.mn.user.UserRepository;
@@ -37,28 +38,40 @@ public class AuthInterceptor implements HandlerInterceptor {
         if (!StringUtils.hasText(token)) {
             token = (String) request.getSession().getAttribute("accessToken");
         }
-        if (!StringUtils.hasText(token) && currentSession.getUser() == null) {
+        if (!StringUtils.hasText(token)) {
             throw new FailureMessageException("user.authentication.empty");
         }
-        if (StringUtils.hasText(token) && tokenBlacklistRepository.existsByToken(token)) {
+        if (tokenBlacklistRepository.existsByToken(token)) {
             throw new FailureMessageException("user.authentication.invalid");
         }
-        if (StringUtils.hasText(token) && !token.equals(currentSession.getAccessToken())) {
-            try {
-                User user = userRepository.findById(jwtUtils.getUserId(token)).orElseThrow(() -> new FailureMessageException("user.authentication.invalid"));
-                // 必须手动获取，不然报 org.hibernate.LazyInitializationException
-                Book book = null;
-                if (user.getDefaultBook() != null) {
-                    book = bookRepository.findById(user.getDefaultBook().getId()).orElseThrow(ItemNotFoundException::new);
-                }
-                Group group = groupRepository.findById(user.getDefaultGroup().getId()).orElseThrow(ItemNotFoundException::new);
-                currentSession.setAccessToken(token);
-                currentSession.setUser(user);
-                currentSession.setBook(book);
-                currentSession.setGroup(group);
-            } catch (JWTVerificationException e) {
-                throw new FailureMessageException("user.authentication.invalid");
+        Integer userId;
+        try {
+            userId = jwtUtils.getUserId(token);
+        } catch (JWTVerificationException e) {
+            if (!tokenBlacklistRepository.existsByToken(token)) {
+                TokenBlacklist blacklist = new TokenBlacklist();
+                blacklist.setToken(token);
+                tokenBlacklistRepository.save(blacklist);
             }
+            currentSession.setAccessToken(null);
+            currentSession.setUser(null);
+            currentSession.setBook(null);
+            currentSession.setGroup(null);
+            request.getSession().removeAttribute("accessToken");
+            throw new FailureMessageException("user.authentication.invalid");
+        }
+        if (!token.equals(currentSession.getAccessToken())) {
+            User user = userRepository.findById(userId).orElseThrow(() -> new FailureMessageException("user.authentication.invalid"));
+            // 必须手动获取，不然报 org.hibernate.LazyInitializationException
+            Book book = null;
+            if (user.getDefaultBook() != null) {
+                book = bookRepository.findById(user.getDefaultBook().getId()).orElseThrow(ItemNotFoundException::new);
+            }
+            Group group = groupRepository.findById(user.getDefaultGroup().getId()).orElseThrow(ItemNotFoundException::new);
+            currentSession.setAccessToken(token);
+            currentSession.setUser(user);
+            currentSession.setBook(book);
+            currentSession.setGroup(group);
         }
         return true;
     }
