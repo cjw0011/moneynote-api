@@ -24,7 +24,7 @@ public class JwtUtils {
                 .withClaim("userId", user.getId())
                 //.withExpiresAt(Instant.now().plus(Duration.ofDays(30))) //30天之后过期
                 .withExpiresAt(Instant.now().plus(Duration.ofMinutes(30))) //30分钟后过期
-		            .sign(Algorithm.HMAC256(secretKey));
+		.sign(Algorithm.HMAC256(secretKey));
 
     }
 
